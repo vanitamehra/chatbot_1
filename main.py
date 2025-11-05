@@ -29,7 +29,7 @@ class Query(BaseModel):
 MODEL_FOLDER = os.path.join(os.path.dirname(__file__), "models")
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
-
+print(MODEL_FOLDER, INDEX_PATH , METADATA_PATH )
 # ---------------------------
 # Load FAISS and docs safely
 # ---------------------------
@@ -72,7 +72,7 @@ def generate_answer(user_question, retrieved_docs):
     context = "\n".join(retrieved_docs)
     prompt = f"""
 You are a helpful assistant. Use ONLY the information below to answer.
-If the answer is not in the context, say "I don't know."
+If the answer is not in the context, say "Ask about courses or admissions."
 
 Context:
 {context}
