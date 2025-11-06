@@ -24,29 +24,38 @@ class Query(BaseModel):
     question: str
 
 # ---------------------------
-# Paths (absolute paths)
+# Paths (absolute)
 # ---------------------------
 MODEL_FOLDER = "D:/institute_project/models"
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
 
-print(MODEL_FOLDER, INDEX_PATH, METADATA_PATH)
+print("[INFO] MODEL_FOLDER:", MODEL_FOLDER)
+print("[INFO] INDEX_PATH:", INDEX_PATH)
+print("[INFO] METADATA_PATH:", METADATA_PATH)
 
 # ---------------------------
-# Load FAISS and chunked docs
+# Load FAISS index and chunks
 # ---------------------------
 try:
     index = faiss.read_index(INDEX_PATH)
     with open(METADATA_PATH, "rb") as f:
         data = pickle.load(f)
-    chunks = data.get("chunks", [])
-    chunk_metadata = data.get("chunk_metadata", [])
-    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, FAISS index has {index.ntotal} vectors")
+        if isinstance(data, dict) and "chunks" in data:
+            chunks = data["chunks"]
+            chunk_metadata = data.get("chunk_metadata", [])
+        elif isinstance(data, list):
+            chunks = data
+            chunk_metadata = None
+        else:
+            chunks = []
+            chunk_metadata = None
+    print(f"[INFO] Loaded {len(chunks)} chunks from metadata, FAISS index has {index.ntotal} vectors")
 except Exception as e:
     print("[ERROR] Failed to load FAISS/index:", e)
     index = None
     chunks = []
-    chunk_metadata = []
+    chunk_metadata = None
 
 # ---------------------------
 # Embedding model
@@ -105,19 +114,16 @@ async def chat(query: Query):
         return {"answer": "Please type something!"}
 
     if index is None or len(chunks) == 0:
-        return {"answer": "Backend not ready. Index/chunks missing."}
+        # Changed message to use fallback instead of "Backend not ready"
+        return {"answer": "Ask about courses or admissions."}
 
-    # ---------------------------
     # Compute embedding and retrieve top-k chunks
-    # ---------------------------
     q_emb = embedding_model.encode([user_question]).astype(np.float32)
     D, I = index.search(q_emb, 7)  # top 7 closest chunks
     retrieved_chunks = [chunks[i] for i in I[0] if i < len(chunks)]
 
-    # ---------------------------
-    # Check relevance threshold
-    # ---------------------------
-    RELEVANCE_THRESHOLD = 0.7  # adjust if needed
+    # Optional: add relevance threshold
+    RELEVANCE_THRESHOLD = 0.7
     if len(retrieved_chunks) == 0 or (D[0][0] > RELEVANCE_THRESHOLD):
         answer = fallback_answer(user_question)
     else:
