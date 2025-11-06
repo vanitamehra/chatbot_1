@@ -24,13 +24,16 @@ class Query(BaseModel):
     question: str
 
 # ---------------------------
-# Paths
+# Paths (fixed)
 # ---------------------------
-MODEL_FOLDER = "D:\institute_project\models"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_FOLDER = os.path.join("D:/institute_project", "models")  # Absolute path (forward slashes)
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
 
-print(MODEL_FOLDER, INDEX_PATH , METADATA_PATH )
+print(f"[INFO] MODEL_FOLDER: {MODEL_FOLDER}")
+print(f"[INFO] INDEX_PATH: {INDEX_PATH}")
+print(f"[INFO] METADATA_PATH: {METADATA_PATH}")
 
 # ---------------------------
 # Load FAISS and chunked docs
@@ -41,7 +44,8 @@ try:
         data = pickle.load(f)
     chunks = data.get("chunks", [])
     chunk_metadata = data.get("chunk_metadata", [])
-    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, FAISS index has {index.ntotal} vectors")
+    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, "
+          f"FAISS index has {index.ntotal} vectors")
 except Exception as e:
     print("[ERROR] Failed to load FAISS/index:", e)
     index = None

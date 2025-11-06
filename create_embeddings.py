@@ -1,4 +1,4 @@
-# backend/create_embeddings.py
+# create_embeddings.py
 
 from sentence_transformers import SentenceTransformer
 import faiss
@@ -6,10 +6,10 @@ import pickle
 import os
 
 # ---------------------------
-# Folders
+# Folders (absolute paths)
 # ---------------------------
-DOCS_FOLDER = "D:/institute_project/backend/data/docs"  # change if different
-MODEL_FOLDER = "D:\institute_project\models"
+DOCS_FOLDER = "D:/institute_project/backend/data/docs"  # where your .txt files are
+MODEL_FOLDER = "D:/institute_project/models"           # where index & metadata will be saved
 
 # ---------------------------
 # Check folder exists
@@ -61,9 +61,9 @@ all_chunks = []
 chunk_metadata = []
 
 for doc, fname in zip(documents, file_names):
-    chunks = chunk_text(doc, chunk_size=100, overlap=20)  # adjust numbers if needed
+    chunks = chunk_text(doc, chunk_size=100, overlap=20)
     all_chunks.extend(chunks)
-    chunk_metadata.extend([fname] * len(chunks))  # track which file the chunk came from
+    chunk_metadata.extend([fname] * len(chunks))
 
 print(f"[INFO] Created {len(all_chunks)} chunks from {len(documents)} documents.")
 
