@@ -24,19 +24,16 @@ class Query(BaseModel):
     question: str
 
 # ---------------------------
-# Paths (fixed)
+# Paths (absolute paths)
 # ---------------------------
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_FOLDER = os.path.join("D:/institute_project", "models")  # Absolute path (forward slashes)
+MODEL_FOLDER = "D:/institute_project/models"
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
 
-print(f"[INFO] MODEL_FOLDER: {MODEL_FOLDER}")
-print(f"[INFO] INDEX_PATH: {INDEX_PATH}")
-print(f"[INFO] METADATA_PATH: {METADATA_PATH}")
+print("[INFO] Model paths:", MODEL_FOLDER, INDEX_PATH, METADATA_PATH)
 
 # ---------------------------
-# Load FAISS and chunked docs
+# Load FAISS index and chunks
 # ---------------------------
 try:
     index = faiss.read_index(INDEX_PATH)
@@ -44,10 +41,9 @@ try:
         data = pickle.load(f)
     chunks = data.get("chunks", [])
     chunk_metadata = data.get("chunk_metadata", [])
-    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, "
-          f"FAISS index has {index.ntotal} vectors")
+    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents. FAISS index has {index.ntotal} vectors.")
 except Exception as e:
-    print("[ERROR] Failed to load FAISS/index:", e)
+    print("[WARNING] Failed to load FAISS/index:", e)
     index = None
     chunks = []
     chunk_metadata = []
@@ -94,7 +90,13 @@ Answer:
 
 def fallback_answer(user_question):
     model, tok = get_generator_model()
-    prompt = f"Answer the following question as a helpful assistant:\nQuestion: {user_question}\nAnswer:"
+    prompt = f"""
+Answer the following question as a helpful assistant.
+If it is not related to courses or admissions, reply "Ask about courses or admissions."
+
+Question: {user_question}
+Answer:
+"""
     inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=512)
     outputs = model.generate(**inputs, max_new_tokens=150)
     return tok.decode(outputs[0], skip_special_tokens=True)
@@ -108,8 +110,10 @@ async def chat(query: Query):
     if user_question == "":
         return {"answer": "Please type something!"}
 
+    # Use retrieval if index & chunks exist, else fallback to LLM
     if index is None or len(chunks) == 0:
-        return {"answer": "Backend not ready. Index/chunks missing."}
+        answer = fallback_answer(user_question)
+        return {"answer": answer}
 
     # Compute embedding and retrieve top-k chunks
     q_emb = embedding_model.encode([user_question]).astype(np.float32)
