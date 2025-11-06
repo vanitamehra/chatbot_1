@@ -6,13 +6,13 @@ import pickle
 import os
 
 # ---------------------------
-# Folders (absolute paths)
+# Folders (absolute paths, Windows-safe)
 # ---------------------------
-DOCS_FOLDER = "D:/institute_project/backend/data/docs"  # where your .txt files are
-MODEL_FOLDER = "D:/institute_project/models"           # where index & metadata will be saved
+DOCS_FOLDER = os.path.join("D:/", "institute_project", "backend", "data", "docs")
+MODEL_FOLDER = os.path.join("D:/", "institute_project", "models")
 
 # ---------------------------
-# Check folder exists
+# Check docs folder exists
 # ---------------------------
 if not os.path.exists(DOCS_FOLDER):
     raise FileNotFoundError(f"Folder not found: {DOCS_FOLDER}")
@@ -38,12 +38,9 @@ if not documents:
 print(f"[INFO] Loaded {len(documents)} documents from folder.")
 
 # ---------------------------
-# Word-based chunking function
+# Word-based chunking
 # ---------------------------
 def chunk_text(text, chunk_size=100, overlap=20):
-    """
-    Split text into chunks of approx `chunk_size` words with `overlap`.
-    """
     words = text.split()
     chunks = []
     start = 0
@@ -51,7 +48,7 @@ def chunk_text(text, chunk_size=100, overlap=20):
         end = start + chunk_size
         chunk = " ".join(words[start:end])
         chunks.append(chunk)
-        start += chunk_size - overlap  # sliding window
+        start += chunk_size - overlap
     return chunks
 
 # ---------------------------
@@ -84,13 +81,16 @@ print(f"[INFO] FAISS index created with {index.ntotal} vectors.")
 # ---------------------------
 # Save index and metadata
 # ---------------------------
-os.makedirs(MODEL_FOLDER, exist_ok=True)
-faiss.write_index(index, os.path.join(MODEL_FOLDER, "index.faiss"))
+try:
+    os.makedirs(MODEL_FOLDER, exist_ok=True)
+    index_file = os.path.join(MODEL_FOLDER, "index.faiss")
+    metadata_file = os.path.join(MODEL_FOLDER, "metadata.pkl")
 
-with open(os.path.join(MODEL_FOLDER, "metadata.pkl"), "wb") as f:
-    pickle.dump({
-        "chunks": all_chunks,
-        "chunk_metadata": chunk_metadata
-    }, f)
+    faiss.write_index(index, index_file)
+    with open(metadata_file, "wb") as f:
+        pickle.dump({"chunks": all_chunks, "chunk_metadata": chunk_metadata}, f)
 
-print(f"[INFO] Saved FAISS index and metadata to '{MODEL_FOLDER}'.")
+    print(f"[INFO] Saved FAISS index to '{index_file}'")
+    print(f"[INFO] Saved metadata to '{metadata_file}'")
+except Exception as e:
+    print("[ERROR] Failed to save files:", e)
