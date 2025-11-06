@@ -24,15 +24,13 @@ class Query(BaseModel):
     question: str
 
 # ---------------------------
-# Paths (absolute)
+# Paths
 # ---------------------------
-MODEL_FOLDER = "D:/institute_project/models"
+MODEL_FOLDER = os.path.join("D:/institute_project", "models")  # absolute path
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
 
-print("[INFO] MODEL_FOLDER:", MODEL_FOLDER)
-print("[INFO] INDEX_PATH:", INDEX_PATH)
-print("[INFO] METADATA_PATH:", METADATA_PATH)
+print(MODEL_FOLDER, INDEX_PATH , METADATA_PATH)
 
 # ---------------------------
 # Load FAISS index and chunks
@@ -41,21 +39,14 @@ try:
     index = faiss.read_index(INDEX_PATH)
     with open(METADATA_PATH, "rb") as f:
         data = pickle.load(f)
-        if isinstance(data, dict) and "chunks" in data:
-            chunks = data["chunks"]
-            chunk_metadata = data.get("chunk_metadata", [])
-        elif isinstance(data, list):
-            chunks = data
-            chunk_metadata = None
-        else:
-            chunks = []
-            chunk_metadata = None
-    print(f"[INFO] Loaded {len(chunks)} chunks from metadata, FAISS index has {index.ntotal} vectors")
+    chunks = data.get("chunks", []) if isinstance(data, dict) else data
+    chunk_metadata = data.get("chunk_metadata", []) if isinstance(data, dict) else []
+    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, FAISS index has {index.ntotal} vectors")
 except Exception as e:
     print("[ERROR] Failed to load FAISS/index:", e)
     index = None
     chunks = []
-    chunk_metadata = None
+    chunk_metadata = []
 
 # ---------------------------
 # Embedding model
@@ -97,13 +88,6 @@ Answer:
     answer = tok.decode(outputs[0], skip_special_tokens=True)
     return answer
 
-def fallback_answer(user_question):
-    model, tok = get_generator_model()
-    prompt = f"Answer the following question as a helpful assistant:\nQuestion: {user_question}\nAnswer:"
-    inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=512)
-    outputs = model.generate(**inputs, max_new_tokens=150)
-    return tok.decode(outputs[0], skip_special_tokens=True)
-
 # ---------------------------
 # Chat endpoint
 # ---------------------------
@@ -114,7 +98,6 @@ async def chat(query: Query):
         return {"answer": "Please type something!"}
 
     if index is None or len(chunks) == 0:
-        # Changed message to use fallback instead of "Backend not ready"
         return {"answer": "Ask about courses or admissions."}
 
     # Compute embedding and retrieve top-k chunks
@@ -122,10 +105,11 @@ async def chat(query: Query):
     D, I = index.search(q_emb, 7)  # top 7 closest chunks
     retrieved_chunks = [chunks[i] for i in I[0] if i < len(chunks)]
 
-    # Optional: add relevance threshold
-    RELEVANCE_THRESHOLD = 0.7
-    if len(retrieved_chunks) == 0 or (D[0][0] > RELEVANCE_THRESHOLD):
-        answer = fallback_answer(user_question)
+    # Use retrieved chunks if similarity is good
+    RELEVANCE_THRESHOLD = 0.7  # smaller = more lenient
+    if len(retrieved_chunks) == 0 or D[0][0] > RELEVANCE_THRESHOLD:
+        # No relevant chunks → fixed fallback
+        answer = "Ask about courses or admissions."
     else:
         answer = generate_answer(user_question, retrieved_chunks)
 
