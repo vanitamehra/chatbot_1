@@ -9,7 +9,7 @@ import os
 # Folders
 # ---------------------------
 DOCS_FOLDER = "D:/institute_project/backend/data/docs"  # change if different
-MODEL_FOLDER = "D:/institute_project/backend/models"
+MODEL_FOLDER = "D:\institute_project\models"
 
 # ---------------------------
 # Check folder exists
