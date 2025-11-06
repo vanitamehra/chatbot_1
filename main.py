@@ -30,20 +30,22 @@ MODEL_FOLDER = os.path.join(os.path.dirname(__file__), "models")
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
 print(MODEL_FOLDER, INDEX_PATH , METADATA_PATH )
+
 # ---------------------------
-# Load FAISS and docs safely
+# Load FAISS and chunked docs
 # ---------------------------
 try:
     index = faiss.read_index(INDEX_PATH)
     with open(METADATA_PATH, "rb") as f:
-        docs = pickle.load(f)
-    if isinstance(docs, dict) and 'chunks' in docs:
-        docs = docs['chunks']
-    print(f"[INFO] Loaded {len(docs)} docs, FAISS index has {index.ntotal} vectors")
+        data = pickle.load(f)
+    chunks = data.get("chunks", [])
+    chunk_metadata = data.get("chunk_metadata", [])
+    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, FAISS index has {index.ntotal} vectors")
 except Exception as e:
     print("[ERROR] Failed to load FAISS/index:", e)
     index = None
-    docs = []
+    chunks = []
+    chunk_metadata = []
 
 # ---------------------------
 # Embedding model
@@ -67,9 +69,9 @@ def get_generator_model():
         print("[INFO] FLAN-T5 loaded")
     return generator_model, tokenizer
 
-def generate_answer(user_question, retrieved_docs):
+def generate_answer(user_question, retrieved_chunks):
     model, tok = get_generator_model()
-    context = "\n".join(retrieved_docs)
+    context = "\n".join(retrieved_chunks)
     prompt = f"""
 You are a helpful assistant. Use ONLY the information below to answer.
 If the answer is not in the context, say "Ask about courses or admissions."
@@ -101,19 +103,19 @@ async def chat(query: Query):
     if user_question == "":
         return {"answer": "Please type something!"}
 
-    if index is None or len(docs) == 0:
-        return {"answer": "Backend not ready. Index/docs missing."}
+    if index is None or len(chunks) == 0:
+        return {"answer": "Backend not ready. Index/chunks missing."}
 
-    # Compute embedding and retrieve top 3 docs
+    # Compute embedding and retrieve top-k chunks
     q_emb = embedding_model.encode([user_question]).astype(np.float32)
-    D, I = index.search(q_emb, 7)
-    retrieved_docs = [docs[i] for i in I[0] if i < len(docs)]
+    D, I = index.search(q_emb, 7)  # top 7 closest chunks
+    retrieved_chunks = [chunks[i] for i in I[0] if i < len(chunks)]
 
-    # Use retrieved docs if available, else fallback
-    if len(retrieved_docs) == 0:
+    # Use retrieved chunks if available, else fallback
+    if len(retrieved_chunks) == 0:
         answer = fallback_answer(user_question)
     else:
-        answer = generate_answer(user_question, retrieved_docs)
+        answer = generate_answer(user_question, retrieved_chunks)
 
     return {"answer": answer}
 
