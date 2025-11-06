@@ -30,10 +30,10 @@ MODEL_FOLDER = "D:/institute_project/models"
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
 
-print("[INFO] Model paths:", MODEL_FOLDER, INDEX_PATH, METADATA_PATH)
+print(MODEL_FOLDER, INDEX_PATH, METADATA_PATH)
 
 # ---------------------------
-# Load FAISS index and chunks
+# Load FAISS and chunked docs
 # ---------------------------
 try:
     index = faiss.read_index(INDEX_PATH)
@@ -41,9 +41,9 @@ try:
         data = pickle.load(f)
     chunks = data.get("chunks", [])
     chunk_metadata = data.get("chunk_metadata", [])
-    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents. FAISS index has {index.ntotal} vectors.")
+    print(f"[INFO] Loaded {len(chunks)} chunks from {len(set(chunk_metadata))} documents, FAISS index has {index.ntotal} vectors")
 except Exception as e:
-    print("[WARNING] Failed to load FAISS/index:", e)
+    print("[ERROR] Failed to load FAISS/index:", e)
     index = None
     chunks = []
     chunk_metadata = []
@@ -90,13 +90,7 @@ Answer:
 
 def fallback_answer(user_question):
     model, tok = get_generator_model()
-    prompt = f"""
-Answer the following question as a helpful assistant.
-If it is not related to courses or admissions, reply "Ask about courses or admissions."
-
-Question: {user_question}
-Answer:
-"""
+    prompt = f"Answer the following question as a helpful assistant:\nQuestion: {user_question}\nAnswer:"
     inputs = tok(prompt, return_tensors="pt", truncation=True, max_length=512)
     outputs = model.generate(**inputs, max_new_tokens=150)
     return tok.decode(outputs[0], skip_special_tokens=True)
@@ -110,18 +104,21 @@ async def chat(query: Query):
     if user_question == "":
         return {"answer": "Please type something!"}
 
-    # Use retrieval if index & chunks exist, else fallback to LLM
     if index is None or len(chunks) == 0:
-        answer = fallback_answer(user_question)
-        return {"answer": answer}
+        return {"answer": "Backend not ready. Index/chunks missing."}
 
+    # ---------------------------
     # Compute embedding and retrieve top-k chunks
+    # ---------------------------
     q_emb = embedding_model.encode([user_question]).astype(np.float32)
     D, I = index.search(q_emb, 7)  # top 7 closest chunks
     retrieved_chunks = [chunks[i] for i in I[0] if i < len(chunks)]
 
-    # Use retrieved chunks if available, else fallback
-    if len(retrieved_chunks) == 0:
+    # ---------------------------
+    # Check relevance threshold
+    # ---------------------------
+    RELEVANCE_THRESHOLD = 0.7  # adjust if needed
+    if len(retrieved_chunks) == 0 or (D[0][0] > RELEVANCE_THRESHOLD):
         answer = fallback_answer(user_question)
     else:
         answer = generate_answer(user_question, retrieved_chunks)
