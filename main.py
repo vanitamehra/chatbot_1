@@ -26,9 +26,10 @@ class Query(BaseModel):
 # ---------------------------
 # Paths
 # ---------------------------
-MODEL_FOLDER = os.path.join(os.path.dirname(__file__), "models")
+MODEL_FOLDER = "D:/institute/models"
 INDEX_PATH = os.path.join(MODEL_FOLDER, "index.faiss")
 METADATA_PATH = os.path.join(MODEL_FOLDER, "metadata.pkl")
+
 print(MODEL_FOLDER, INDEX_PATH , METADATA_PATH )
 
 # ---------------------------
