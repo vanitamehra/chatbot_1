@@ -6,7 +6,8 @@ from pydantic import BaseModel
 import pickle
 import faiss
 import numpy as np
-from langchain_community.embeddings import HuggingFaceEmbeddings
+
+from langchain_huggingface import HuggingFaceEmbeddings
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 import os
 
@@ -58,12 +59,19 @@ embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mp
 # ---------------------------
 # Helper: retrieve top k docs
 # ---------------------------
+
+MAX_EMBED_TOKENS = 512  
+
 def retrieve_docs(query_text, k=10):
+    query_text = query_text[:1000]  
     query_vector = embedding_model.embed_query(query_text)
     query_vector = np.array(query_vector).astype("float32")
     query_vector = query_vector / np.linalg.norm(query_vector)  # normalize
     D, I = index.search(np.array([query_vector]), k)
     return [docs[i] for i in I[0]]
+
+
+
 
 # ---------------------------
 # Load Flan-T5 LLM via HuggingFace pipeline
@@ -78,34 +86,34 @@ flan_pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
 # ---------------------------
 def run_rag(query_text):
     retrieved_texts = retrieve_docs(query_text)
-    
-    course_keywords = ["course", "curriculum", "module", "syllabus", "bootcamp", "program", "training"]
-    fee_keywords = ["fee", "enrollment", "tuition", "price", "cost"]
-    q_lower = query_text.lower()
-
-    # Fallback if no relevant context
     if not retrieved_texts or all(len(t.strip()) == 0 for t in retrieved_texts):
+        # Check question type using keywords
+        course_keywords = ["course", "curriculum", "module", "syllabus"]
+        fee_keywords = ["fee", "enrollment", "tuition"]
+        q_lower = query_text.lower()
+
         if any(word in q_lower for word in course_keywords):
-            return "For further details about the course or program, please contact the institute."
+            return "For further details please contact the institute."
         elif any(word in q_lower for word in fee_keywords):
             return "For enrollment or fee details, please contact the institute directly."
         else:
-            return "I can only answer questions related to courses or programs."
+            return "I can only answer questions related to courses."
 
-    # Combine context
+
     context = "\n".join(retrieved_texts)
-
+    
     prompt = f"""Answer the question ONLY using the context below. 
+
 
 IMPORTANT: If the context does NOT contain the answer, DO NOT guess. 
 Only return the fallback messages as instructed.
 
 Follow these rules based on the question type:
 
-1. **Course/program-related questions:** Answer only using the context. 
-   If the context does not contain the answer, respond: 'For further details about the course or program, please contact the institute.'
+1. **Course-related questions:** Answer only using the context. 
+   If the context does not contain the answer, respond: 'For details about courses, please contact the institute.'
 2. **Enrollment or fee questions:** Respond: 'For enrollment or fee details, please contact the institute directly.'
-3. **Other questions:** Respond: 'I can only answer questions related to courses or programs.'
+3. **Other questions:** Respond: 'I can only answer questions related to courses.'
 
 Context:
 {context}
@@ -117,12 +125,16 @@ Answer:"""
     result = flan_pipe(prompt, max_new_tokens=256, do_sample=False)
     if not result or 'generated_text' not in result[0]:
         return "Sorry, I could not generate an answer."
-    
-    return result[0]['generated_text'].strip()
+    return result[0]['generated_text']
 
 # ---------------------------
 # API endpoints
 # ---------------------------
+
+@app.get("/")
+def root():
+    return {"message": "RAG + Chat API running", "status": "ok"}
+
 @app.post("/ask", response_model=Answer)
 def ask_question(query: Query):
     """Regular text-based answer."""
@@ -140,18 +152,19 @@ def chat_endpoint(query: Query):
     return ask_question(query)
 
 '''
+
 @app.post("/generate_pdf")
 def generate_pdf_endpoint(query: Query):
     """
-    Generates a PDF version ONLY for course/program-related questions.
+    Generates a PDF version ONLY for course-related questions.
     """
     try:
         answer_text = run_rag(query.question)
         if not answer_text:
             answer_text = "Sorry, I could not generate an answer."
 
-        # Only generate PDF for course/program queries
-        course_keywords = ["curriculum", "course", "syllabus", "module", "bootcamp", "program"]
+        # Only generate PDF for course-related queries
+        course_keywords = ["curriculum", "course", "syllabus", "module"]
         if any(word in query.question.lower() for word in course_keywords):
             pdf_buffer = generate_pdf_from_text(answer_text, title=query.question)
             headers = {"Content-Disposition": f"attachment; filename=answer.pdf"}
@@ -161,7 +174,7 @@ def generate_pdf_endpoint(query: Query):
                 headers=headers
             )
         else:
-            return {"message": "PDF generation is only available for course/program-related questions.", "answer": answer_text}
+            return {"message": "PDF generation is only available for course-related questions.", "answer": answer_text}
 
     except Exception as e:
         return {"error": str(e)}
