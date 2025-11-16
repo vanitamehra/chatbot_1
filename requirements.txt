@@ -3,20 +3,16 @@ fastapi==0.111.0
 uvicorn[standard]==0.23.2
 
 # Data handling
-numpy==1.27.5
-pickle5==0.0.13
+numpy>=1.27.0
 
 # FAISS for vector search
 faiss-cpu==1.7.4
 
 # Transformers + HuggingFace
-transformers==4.42.2
+transformers>=4.35.0
 torch==2.1.1+cpu
-sentence-transformers==2.2.2
-langchain-community==0.1.1
+sentence-transformers>=2.2.2
+langchain>=0.1.0
 
-# Optional PDF generation (if you enable generate_pdf)
+# Optional PDF generation
 reportlab==4.0.0
-
-# Embeddings
-langchain_community==0.1.1
