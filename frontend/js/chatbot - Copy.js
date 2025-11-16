@@ -4,7 +4,6 @@
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
-const downloadPdfBtn = document.getElementById('download-pdf-btn'); // new button
 
 // Function to append messages in chat
 function appendMessage(sender, message) {
@@ -23,7 +22,7 @@ function appendMessage(sender, message) {
     chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Function to send message to backend (chat)
+// Function to send message to backend
 async function sendMessageToBackend(message) {
     try {
         const response = await fetch('http://127.0.0.1:8000/chat', {
@@ -33,37 +32,14 @@ async function sendMessageToBackend(message) {
         });
 
         const data = await response.json();
+
+        // Show full response in console for debugging
         console.log("Backend response:", data);
 
         appendMessage('bot', data.answer);
     } catch (err) {
         appendMessage('bot', 'Error connecting to backend.');
         console.error("Backend error:", err);
-    }
-}
-
-// Function to generate PDF from backend
-async function downloadPdf(message) {
-    try {
-        const response = await fetch('http://127.0.0.1:8000/generate_pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question: message })
-        });
-
-        if (!response.ok) throw new Error("Failed to generate PDF");
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "answer.pdf";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-    } catch (err) {
-        console.error(err);
-        alert("Error generating PDF");
     }
 }
 
@@ -82,12 +58,3 @@ sendBtn.addEventListener('click', () => {
 userInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') sendBtn.click();
 });
-
-// Handle Download PDF button click (if button exists)
-if (downloadPdfBtn) {
-    downloadPdfBtn.addEventListener('click', () => {
-        const message = userInput.value.trim();
-        if (!message) return alert("Type a question first!");
-        downloadPdf(message);
-    });
-}

@@ -1,23 +1,22 @@
-# create_embeddings.py
+# create_embeddings.py (clean, LangChain 1.0+, CPU-friendly)
 
 import os
-import numpy as np
 import pickle
 import faiss
-from sentence_transformers import SentenceTransformer
+import numpy as np
+from langchain_huggingface import HuggingFaceEmbeddings
 
 # ---------------------------
 # Folders
 # ---------------------------
-DOCS_FOLDER = os.path.join("backend", "data", "docs")  # folder with .txt files
-MODEL_FOLDER = "models"  # folder to save FAISS index and metadata
+DOCS_FOLDER = os.path.join("backend", "data", "docs")
+MODEL_FOLDER = os.path.join("models")
 os.makedirs(MODEL_FOLDER, exist_ok=True)
 
 # ---------------------------
 # Load documents
 # ---------------------------
 docs = []
-
 if not os.path.exists(DOCS_FOLDER):
     raise FileNotFoundError(f"❌ Docs folder not found: {DOCS_FOLDER}")
 
@@ -37,13 +36,14 @@ print(f"[INFO] ✅ Loaded {len(docs)} documents.")
 # ---------------------------
 # Create embeddings
 # ---------------------------
-print("[INFO] Creating embeddings using 'all-mpnet-base-v2'...")
-model = SentenceTransformer("all-mpnet-base-v2")
-embeddings = model.encode(docs, convert_to_numpy=True, show_progress_bar=True)
+print("[INFO] Creating embeddings using 'sentence-transformers/sentence-t5-base'...")
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/sentence-t5-base")
+embeddings = embedding_model.embed_documents(docs)
 
 # Normalize for cosine similarity
-embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-embeddings = embeddings.astype("float32")
+embeddings = np.array(embeddings, dtype="float32")
+embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
+print(f"[INFO] ✅ Created and normalized {len(embeddings)} embeddings.")
 
 # ---------------------------
 # Create FAISS index
@@ -56,8 +56,12 @@ print(f"[INFO] ✅ FAISS index created with {index.ntotal} vectors (dim={dimensi
 # ---------------------------
 # Save index and metadata
 # ---------------------------
-faiss.write_index(index, os.path.join(MODEL_FOLDER, "index.faiss"))
-with open(os.path.join(MODEL_FOLDER, "metadata.pkl"), "wb") as f:
+index_path = os.path.join(MODEL_FOLDER, "index.faiss")
+meta_path = os.path.join(MODEL_FOLDER, "metadata.pkl")
+
+faiss.write_index(index, index_path)
+with open(meta_path, "wb") as f:
     pickle.dump(docs, f)
 
-print(f"[INFO] ✅ Saved FAISS index and metadata to '{MODEL_FOLDER}'")
+print(f"[INFO] ✅ Saved FAISS index to '{index_path}'")
+print(f"[INFO] ✅ Saved metadata to '{meta_path}'")
