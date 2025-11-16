@@ -1,22 +1,37 @@
-# Use official Python 3.11 slim image
+# 1. Base image
 FROM python:3.11-slim
 
-# Set working directory
+# 2. Environment
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# 3. Working directory
 WORKDIR /app
 
-# Copy requirements first for caching
+# 4. Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    wget \
+    pkg-config \
+    libcairo2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. Copy requirements
 COPY requirements.txt .
 
-# Install dependencies
-RUN pip install --upgrade pip
+# 6. Install pip + torch CPU
+RUN pip install --upgrade pip && \
+    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.1.1
+
+# 7. Install all remaining dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your app
+# 8. Copy app code
 COPY . .
 
-# Expose port (same as your FastAPI/Flask app)
+# 9. Expose port
 EXPOSE 8000
 
-# Command to run your app
-# Replace main:app with your FastAPI app entry point
+# 10. Run app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
