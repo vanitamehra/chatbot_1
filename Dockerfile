@@ -1,5 +1,5 @@
 # 1. Base image
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 # 2. Environment
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -15,16 +15,17 @@ RUN apt-get update && apt-get install -y \
     wget \
     pkg-config \
     libcairo2-dev \
+    libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 5. Copy requirements
 COPY requirements.txt .
 
-# 6. Install pip + torch CPU
+# 6. Upgrade pip and install Torch CPU first
 RUN pip install --upgrade pip && \
-    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.1.1
+    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.2.1
 
-# 7. Install all remaining dependencies
+# 7. Install remaining dependencies (all pinned versions)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 8. Copy app code
