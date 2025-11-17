@@ -1,4 +1,4 @@
-# main.py (CPU-only, manual RAG + PDF generator)
+# main.py (CPU-only, manual RAG + PDF generator, no LangChain)
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,12 +7,9 @@ import pickle
 import faiss
 import numpy as np
 
-from langchain_huggingface import HuggingFaceEmbeddings
+from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 import os
-
-# Import dynamic PDF generator from backend folder
-# from generate_pdf import generate_pdf_from_text
 
 # ---------------------------
 # FastAPI setup
@@ -52,25 +49,22 @@ with open(metadata_path, "rb") as f:
     docs = pickle.load(f)
 
 # ---------------------------
-# Embedding model
+# Embedding model using Sentence-Transformers
 # ---------------------------
-embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
 # ---------------------------
 # Helper: retrieve top k docs
 # ---------------------------
-
 MAX_EMBED_TOKENS = 512  
 
 def retrieve_docs(query_text, k=10):
-    query_text = query_text[:1000]  
-    query_vector = embedding_model.embed_query(query_text)
-    query_vector = np.array(query_vector).astype("float32")
+    query_text = query_text[:1000]  # truncate to avoid long text
+    query_vector = embedding_model.encode(query_text, convert_to_numpy=True)
+    query_vector = query_vector.astype("float32")
     query_vector = query_vector / np.linalg.norm(query_vector)  # normalize
     D, I = index.search(np.array([query_vector]), k)
     return [docs[i] for i in I[0]]
-
-
 
 
 # ---------------------------
@@ -87,7 +81,6 @@ flan_pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
 def run_rag(query_text):
     retrieved_texts = retrieve_docs(query_text)
     if not retrieved_texts or all(len(t.strip()) == 0 for t in retrieved_texts):
-        # Check question type using keywords
         course_keywords = ["course", "curriculum", "module", "syllabus"]
         fee_keywords = ["fee", "enrollment", "tuition"]
         q_lower = query_text.lower()
@@ -99,11 +92,9 @@ def run_rag(query_text):
         else:
             return "I can only answer questions related to courses."
 
-
     context = "\n".join(retrieved_texts)
     
     prompt = f"""Answer the question ONLY using the context below. 
-
 
 IMPORTANT: If the context does NOT contain the answer, DO NOT guess. 
 Only return the fallback messages as instructed.
@@ -121,7 +112,6 @@ Context:
 Question: {query_text}
 Answer:"""
 
-    # Run LLM pipeline
     result = flan_pipe(prompt, max_new_tokens=256, do_sample=False)
     if not result or 'generated_text' not in result[0]:
         return "Sorry, I could not generate an answer."
@@ -130,14 +120,12 @@ Answer:"""
 # ---------------------------
 # API endpoints
 # ---------------------------
-
 @app.get("/")
 def root():
     return {"message": "RAG + Chat API running", "status": "ok"}
 
 @app.post("/ask", response_model=Answer)
 def ask_question(query: Query):
-    """Regular text-based answer."""
     try:
         answer_text = run_rag(query.question)
         if not answer_text:
@@ -148,37 +136,7 @@ def ask_question(query: Query):
 
 @app.post("/chat", response_model=Answer)
 def chat_endpoint(query: Query):
-    """Alias endpoint."""
     return ask_question(query)
-
-'''
-
-@app.post("/generate_pdf")
-def generate_pdf_endpoint(query: Query):
-    """
-    Generates a PDF version ONLY for course-related questions.
-    """
-    try:
-        answer_text = run_rag(query.question)
-        if not answer_text:
-            answer_text = "Sorry, I could not generate an answer."
-
-        # Only generate PDF for course-related queries
-        course_keywords = ["curriculum", "course", "syllabus", "module"]
-        if any(word in query.question.lower() for word in course_keywords):
-            pdf_buffer = generate_pdf_from_text(answer_text, title=query.question)
-            headers = {"Content-Disposition": f"attachment; filename=answer.pdf"}
-            return Response(
-                content=pdf_buffer.getvalue(),
-                media_type="application/pdf",
-                headers=headers
-            )
-        else:
-            return {"message": "PDF generation is only available for course-related questions.", "answer": answer_text}
-
-    except Exception as e:
-        return {"error": str(e)}
-'''
 
 @app.get("/health")
 def health_check():

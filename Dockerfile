@@ -1,14 +1,22 @@
+# ---------------------------
 # 1. Base image
+# ---------------------------
 FROM python:3.10-slim
 
-# 2. Environment
+# ---------------------------
+# 2. Environment variables
+# ---------------------------
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# ---------------------------
 # 3. Working directory
+# ---------------------------
 WORKDIR /app
 
+# ---------------------------
 # 4. Install system dependencies
+# ---------------------------
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
@@ -18,21 +26,33 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 5. Copy requirements
+# ---------------------------
+# 5. Copy requirements file
+# ---------------------------
 COPY requirements.txt .
 
-# 6. Upgrade pip and install Torch CPU first
+# ---------------------------
+# 6. Upgrade pip and install CPU Torch first
+# ---------------------------
 RUN pip install --upgrade pip && \
     pip install --index-url https://download.pytorch.org/whl/cpu torch==2.2.1
 
-# 7. Install remaining dependencies (all pinned versions)
+# ---------------------------
+# 7. Install remaining dependencies
+# ---------------------------
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 8. Copy app code
+# ---------------------------
+# 8. Copy application code
+# ---------------------------
 COPY . .
 
+# ---------------------------
 # 9. Expose port
+# ---------------------------
 EXPOSE 8000
 
-# 10. Run app
+# ---------------------------
+# 10. Run FastAPI app
+# ---------------------------
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
