@@ -78,44 +78,51 @@ flan_pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer)
 # ---------------------------
 # Manual RAG function
 # ---------------------------
-def run_rag(query_text):
-    retrieved_texts = retrieve_docs(query_text)
-    if not retrieved_texts or all(len(t.strip()) == 0 for t in retrieved_texts):
-        course_keywords = ["course", "curriculum", "module", "syllabus"]
-        fee_keywords = ["fee", "enrollment", "tuition"]
-        q_lower = query_text.lower()
 
+def run_rag(query_text):
+    # Retrieve top documents
+    retrieved_texts = retrieve_docs(query_text)
+    course_keywords = ["course", "curriculum", "module", "syllabus"]
+    fee_keywords = ["fee", "enrollment", "tuition"]
+    q_lower = query_text.lower()
+
+    # Early fallback if no docs or empty docs
+    if not retrieved_texts or all(len(t.strip()) == 0 for t in retrieved_texts):
         if any(word in q_lower for word in course_keywords):
-            return "For further details please contact the institute."
+            return "For details about courses, please contact the institute."
         elif any(word in q_lower for word in fee_keywords):
             return "For enrollment or fee details, please contact the institute directly."
         else:
             return "I can only answer questions related to courses."
 
+    # Combine retrieved context
     context = "\n".join(retrieved_texts)
-    
-    prompt = f"""Answer the question ONLY using the context below. 
 
-IMPORTANT: If the context does NOT contain the answer, DO NOT guess. 
-Only return the fallback messages as instructed.
+    # Strict prompt with explicit fallback rules
+    prompt = f"""
+Answer the question using ONLY the context below. DO NOT make up answers. 
+If the context does NOT contain the answer, provide the fallback messages exactly as instructed.
 
-Follow these rules based on the question type:
-
-1. **Course-related questions:** Answer only using the context. 
-   If the context does not contain the answer, respond: 'For details about courses, please contact the institute.'
-2. **Enrollment or fee questions:** Respond: 'For enrollment or fee details, please contact the institute directly.'
-3. **Other questions:** Respond: 'I can only answer questions related to courses.'
+Fallback rules:
+1. For course-related questions: 'For details about courses, please contact the institute.'
+2. For enrollment or fee questions: 'For enrollment or fee details, please contact the institute directly.'
+3. For any other questions: 'I can only answer questions related to courses.'
 
 Context:
 {context}
 
 Question: {query_text}
-Answer:"""
+Answer strictly according to the rules above:
+"""
 
+    # Generate answer using Flan-T5
     result = flan_pipe(prompt, max_new_tokens=256, do_sample=False)
     if not result or 'generated_text' not in result[0]:
         return "Sorry, I could not generate an answer."
-    return result[0]['generated_text']
+
+    # Return cleaned up answer
+    return result[0]['generated_text'].strip()
+
 
 # ---------------------------
 # API endpoints
